@@ -1,0 +1,58 @@
+services:
+  db:
+    image: mysql:8.4.3
+    volumes_from:
+      - disk
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    restart: "no"
+    tty: true
+    stdin_open: true
+  php:
+    build:
+      context: "./php"
+      dockerfile: Dockerfile
+      args:
+        - SITE_EDITOR_GID=${SITE_EDITOR_GID}
+        - DOCKER_USER_UID_GID=${DOCKER_USER_UID_GID}
+        - DOCKER_WEB_USER=${DOCKER_WEB_USER}
+        - PHP_VERSION=${PHP_VERSION}
+        - PROJECT_ROOT=${PROJECT_ROOT}
+        - PUBLIC_ROOT=${PUBLIC_ROOT}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: 3306
+      PHP_IDE_CONFIG: serverName=xdebug-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes_from:
+      - disk
+    depends_on:
+      - db
+    restart: "no"
+    tty: true
+    stdin_open: true
+  disk:
+    image: ubuntu:24.04
+    volumes:
+      - ./app:${PROJECT_ROOT}
+      - ./db-data:/var/lib/mysql
+      - ./log/php:/var/log/php
+    # https://www.baeldung.com/ops/docker-compose-multiple-commands#1-using-the-ampamp-operator
+    command: /bin/bash -c "
+      chgrp -R ${SITE_EDITOR_GID} ${PROJECT_ROOT};
+      find ${PROJECT_ROOT} -type d -exec chmod 2775 -- {} +;
+      chgrp ${SITE_EDITOR_GID} /var/log/php;
+      find /var/log/php -type d -exec chmod g+rwx -- {} +;
+      find /var/log/php -type f -exec chmod g+rw -- {} +;
+      find /var/log/php -type f -exec chgrp ${SITE_EDITOR_GID} -- {} +;
+      "
+    restart: "no"
